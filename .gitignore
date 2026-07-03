@@ -19,6 +19,7 @@ build
 *.pt
 *.log
 *.json
+!music_infuser/configs/counterfactual_eval_manifest.example.json
 *.safetensors
 wandb/
 *.err
@@ -38,6 +39,7 @@ dist
 *.log
 *.log.*
 *.json
+!music_infuser/configs/counterfactual_eval_manifest.example.json
 *.jsonl
 log_dir*/
 temp*/

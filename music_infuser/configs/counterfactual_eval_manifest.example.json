@@ -1,0 +1,21 @@
+{
+  "video_curve": "hybrid",
+  "runs": [
+    {
+      "model": "musicinfuser",
+      "condition": "original",
+      "prompt_id": "minimal",
+      "seed": 42,
+      "audio": "/home/ubuntu/342/hyellim/projects/listen-align-m2v/assets/audio/original/moon_5s.wav",
+      "video": "/home/ubuntu/342/hyellim/projects/listen-align-m2v/outputs/raw/musicinfuser/moon_original_seed42.mp4"
+    },
+    {
+      "model": "musicinfuser",
+      "condition": "silence",
+      "prompt_id": "minimal",
+      "seed": 42,
+      "audio": "/home/ubuntu/342/hyellim/projects/listen-align-m2v/assets/audio/counterfactual/moon_silence_5s.wav",
+      "video": "/home/ubuntu/342/hyellim/projects/listen-align-m2v/outputs/raw/musicinfuser/moon_silence_seed42.mp4"
+    }
+  ]
+}

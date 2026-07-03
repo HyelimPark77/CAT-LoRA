@@ -1,0 +1,95 @@
+# CAT-LoRA configuration for MusicInfuser.
+#
+# This file is intentionally explicit: it is the experiment contract for the
+# paper method, not just a quick run config.
+
+project_root: /home/ubuntu/342/hyellim/projects/CAT-LoRA
+backbone:
+  name: MusicInfuser
+  repo_dir: /home/ubuntu/342/hyellim/projects/CAT-LoRA
+  weights_dir: /home/ubuntu/342/hyellim/projects/CAT-LoRA/weights
+  freeze_base_video_generator: true
+  freeze_text_encoder: true
+  freeze_vae: true
+  freeze_audio_encoder: true
+
+data:
+  train_manifest: /home/ubuntu/342/hyellim/datasets/aistpp/listen_align_train.jsonl
+  val_manifest: /home/ubuntu/342/hyellim/datasets/aistpp/listen_align_val.jsonl
+  split_policy: held_out_music_tracks
+  clip_duration_sec: 2.5
+  audio_sample_rate: 16000
+
+audio_curve:
+  hop_length: 512
+  frame_length: 2048
+  energy_weight: 0.4
+  onset_weight: 0.4
+  flux_weight: 0.2
+  use_beat_for_training: false
+  use_beat_for_eval: true
+
+counterfactual_training:
+  transforms:
+    local_silence:
+      probability: 0.30
+      duration_sec: [0.5, 1.0]
+      center: strongest_onset
+    shift:
+      probability: 0.25
+      shift_sec: [-0.5, 0.5]
+      padding: zero
+    tempo:
+      probability: 0.25
+      rates: [0.8, 1.2]
+      preserve_pitch: true
+    global_silence:
+      probability: 0.05
+    original_only:
+      probability: 0.15
+
+lora:
+  name: CAT-LoRA
+  rank: 64
+  alpha: 64
+  dropout: 0.0
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - out_proj
+    - to_q
+    - to_k
+    - to_v
+    - to_out
+  train_audio_projection: true
+  train_zero_initialized_audio_adapters: true
+
+optimization:
+  max_steps: 4000
+  warmup_steps: 200
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  precision: bf16
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+
+loss_weights:
+  diffusion: 1.0
+  audio_motion_corr: 0.10
+  peak_distribution: 0.05
+  counterfactual_delta: 0.20
+  silence_suppression: 0.10
+  temporal_mean_preserve: 0.50
+  motion_smoothness: 0.01
+
+evaluation:
+  same_prompt_seed_audio_only_change: true
+  metrics:
+    - audio_motion_corr
+    - peak_alignment_sec
+    - peak_f1
+    - silence_suppression
+    - estimated_lag_sec
+    - tempo_corr
+    - prompt_dominance_ratio

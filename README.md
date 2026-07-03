@@ -61,6 +61,23 @@ bash music_infuser/run.bash -c music_infuser/configs/music_infuser.yaml -n 1
 
 **Note:** The current implementation only supports single-GPU training, which requires approximately 80GB of VRAM to train with 73-frame sequences.
 
+## 🔬 CAT-LoRA Additions
+
+This fork adds a counterfactual audio-temporal adaptation layer on top of
+MusicInfuser. The core idea is to test and improve whether generated video
+dynamics change when only the input audio timing changes.
+
+Added components:
+- `music_infuser/cat_lora/`: audio curves, video response curves, metrics, and differentiable training losses.
+- `music_infuser/configs/cat_lora_musicinfuser.yaml`: experiment contract for CAT-LoRA training.
+- `music_infuser/configs/counterfactual_eval_manifest.example.json`: manifest format for counterfactual evaluation.
+- `docs/CAT_LORA_METHOD.md`: method specification.
+- `scripts/run_eval_counterfactual.sh`: evaluation entry point.
+
+The original MusicInfuser training and inference paths are intentionally left
+unchanged. CAT-LoRA training should be wired in as an explicit extension rather
+than silently replacing the original reproduction path.
+
 ## 🧑‍⚖️ VLM Evaluation
 For evaluating the model using Visual Language Models:
 
