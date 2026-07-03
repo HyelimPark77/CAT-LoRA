@@ -129,18 +129,22 @@ def build_model(cfg: DictConfig, checkpoint_path: Path, device_id: int):
     is_audio = audio_mode is not None
     is_lora = "lora" in cfg.model.type
     is_full = "full" in cfg.model.type
+    trainable_scope = str(cfg.model.get("trainable_scope", "audio_lora" if is_audio else "lora_only"))
+    pretrained_adapter_path = cfg.model.get("pretrained_adapter_path")
 
     patch_model_fns = []
     model_kwargs = {}
     if is_lora:
-        if is_audio:
+        if trainable_scope == "audio_lora":
             def mark_lora_params(m):
                 audio.mark_audio_and_lora_as_trainable(m, bias="none")
                 return m
-        else:
+        elif trainable_scope == "lora_only":
             def mark_lora_params(m):
                 lora.mark_only_lora_as_trainable(m, bias="none")
                 return m
+        else:
+            raise ValueError(f"Unsupported trainable_scope for LoRA model: {trainable_scope}")
         patch_model_fns.append(mark_lora_params)
         model_kwargs = dict(**cfg.model.kwargs)
         for k, v in model_kwargs.items():
@@ -158,6 +162,7 @@ def build_model(cfg: DictConfig, checkpoint_path: Path, device_id: int):
 
     model = DitModelFactory(
         model_path=str(checkpoint_path),
+        lora_path=str(pretrained_adapter_path) if pretrained_adapter_path else None,
         model_dtype="bf16",
         attention_mode=cfg.attention_mode,
         audio_mode=audio_mode,
@@ -171,7 +176,7 @@ def build_model(cfg: DictConfig, checkpoint_path: Path, device_id: int):
         strict_load=not is_lora and not is_audio,
         fast_init=not is_lora and not is_audio,
     ).train()
-    return model, model_kwargs, is_lora, is_full, is_audio
+    return model, model_kwargs, is_lora, is_full, is_audio, trainable_scope
 
 
 def get_train_loader(cfg: DictConfig):
@@ -208,6 +213,7 @@ def save_adapter_checkpoint(
     is_lora: bool,
     is_full: bool,
     is_audio: bool,
+    trainable_scope: str,
 ) -> None:
     if is_lora:
         model_sd = lora.lora_state_dict(model, bias="none")
@@ -218,7 +224,7 @@ def save_adapter_checkpoint(
     else:
         model_sd = {}
 
-    if is_audio:
+    if is_audio and trainable_scope in {"audio_lora", "audio_only"}:
         model_sd.update(model.audio_projection.get_state_dict())
         if model.audio_cross_attn_blocks:
             audio_ca_sd = model.audio_cross_attn_blocks.state_dict()
@@ -249,11 +255,12 @@ def main(config_path: str) -> None:
     print(f"MOCHI_T5_MODEL={os.environ.get('MOCHI_T5_MODEL', '<default google/t5-v1_1-xxl>')}")
 
     train_dl_iter = infinite_dl(get_train_loader(cfg))
-    model, model_kwargs, is_lora, is_full, is_audio = build_model(cfg, checkpoint_path, device_id)
+    model, model_kwargs, is_lora, is_full, is_audio, trainable_scope = build_model(cfg, checkpoint_path, device_id)
     trainable_params = [p for p in model.parameters() if p.requires_grad]
     total_param_count = sum(p.numel() for p in model.parameters())
     trainable_param_count = sum(p.numel() for p in trainable_params)
     print(f"Trainable parameters: {trainable_param_count:,} / {total_param_count:,}")
+    print(f"Trainable scope: {trainable_scope}")
     optimizer = torch.optim.AdamW(trainable_params, **cfg.optimizer)
     scheduler = get_cosine_annealing_lr_scheduler(
         optimizer,
@@ -399,6 +406,7 @@ def main(config_path: str) -> None:
                     is_lora=is_lora,
                     is_full=is_full,
                     is_audio=is_audio,
+                    trainable_scope=trainable_scope,
                 )
 
 
