@@ -224,7 +224,7 @@ def save_adapter_checkpoint(
     else:
         model_sd = {}
 
-    if is_audio and trainable_scope in {"audio_lora", "audio_only"}:
+    if is_audio:
         model_sd.update(model.audio_projection.get_state_dict())
         if model.audio_cross_attn_blocks:
             audio_ca_sd = model.audio_cross_attn_blocks.state_dict()
@@ -396,7 +396,7 @@ def main(config_path: str) -> None:
         log_kwargs["train/loss_total"] = total_loss.item()
         pbar.set_postfix(**log_kwargs)
 
-        if cfg.training.save_interval and step > 0 and (step + 1) % cfg.training.save_interval == 0:
+        if cfg.training.save_interval and (step + 1) % cfg.training.save_interval == 0:
             save_path = checkpoint_dir / f"model_{step+1}.cat_lora.safetensors"
             with timer("save_adapter_checkpoint"):
                 save_adapter_checkpoint(
