@@ -318,14 +318,24 @@ def main(config_path: str) -> None:
 
         ut_dit_space = vae_latents_to_dit_latents(ut.float())
         diffusion_loss = F.mse_loss(preds.float(), ut_dit_space)
-        total_loss = diffusion_loss
+        total_loss_value = float(diffusion_loss.item())
         log_kwargs = {
             "train/loss_diffusion": diffusion_loss.item(),
             "train/epoch": epoch_idx,
             "train/lr": scheduler.get_last_lr()[0],
         }
 
+        if not dry_run_no_backward:
+            diffusion_loss.backward()
+
         if use_counterfactual:
+            with torch.no_grad():
+                orig_clean_ref = estimate_clean_latent(z_sigma, sigma, preds.detach())
+                orig_motion_ref = latent_motion_curve(orig_clean_ref).detach()
+            if not dry_run_no_backward:
+                del preds, diffusion_loss
+                clear_cuda_cache()
+
             cf = make_feature_counterfactual(
                 audio_embed["audio_embeddings"],
                 local_silence_prob=float(cat_cfg.get("local_silence_prob", 0.35)),
@@ -333,6 +343,7 @@ def main(config_path: str) -> None:
                 tempo_prob=float(cat_cfg.get("tempo_prob", 0.25)),
                 global_silence_prob=float(cat_cfg.get("global_silence_prob", 0.10)),
             )
+
             forward_context = torch.no_grad() if dry_run_no_backward else nullcontext()
             with forward_context, torch.autocast("cuda", dtype=torch.bfloat16):
                 cf_preds = model(
@@ -345,27 +356,30 @@ def main(config_path: str) -> None:
                     num_qkv_checkpoint=cfg.training.num_qkv_checkpoint,
                 )
 
-            orig_clean = estimate_clean_latent(z_sigma, sigma, preds)
             cf_clean = estimate_clean_latent(z_sigma, sigma, cf_preds)
-            orig_motion = latent_motion_curve(orig_clean)
             cf_motion = latent_motion_curve(cf_clean)
-            orig_curve = resample_curve(cf.original_curve.to(device), orig_motion.shape[-1])
+            orig_curve = resample_curve(cf.original_curve.to(device), orig_motion_ref.shape[-1])
             cf_curve = resample_curve(cf.counterfactual_curve.to(device), cf_motion.shape[-1])
             silence_mask = resample_curve(cf.silence_mask.to(device), cf_motion.shape[-1])
 
-            align_loss = corr_loss(orig_curve, orig_motion)
-            peak_loss = peak_kl_loss(orig_curve, orig_motion)
-            delta_loss = delta_response_loss(orig_curve, cf_curve, orig_motion, cf_motion)
-            silence_loss = silence_suppression_loss(orig_motion, cf_motion, silence_mask)
-            preserve_loss = temporal_mean_preserve_loss(cf_clean, orig_clean)
+            align_loss = corr_loss(orig_curve, orig_motion_ref)
+            peak_loss = peak_kl_loss(orig_curve, orig_motion_ref)
+            delta_loss = delta_response_loss(orig_curve, cf_curve, orig_motion_ref, cf_motion)
+            silence_loss = silence_suppression_loss(orig_motion_ref, cf_motion, silence_mask)
+            preserve_loss = temporal_mean_preserve_loss(cf_clean, orig_clean_ref)
             smooth_loss = motion_smoothness_loss(cf_motion)
 
-            total_loss = total_loss + float(loss_w.get("audio_motion_corr", 0.10)) * align_loss
-            total_loss = total_loss + float(loss_w.get("peak_distribution", 0.05)) * peak_loss
-            total_loss = total_loss + float(loss_w.get("counterfactual_delta", 0.20)) * delta_loss
-            total_loss = total_loss + float(loss_w.get("silence_suppression", 0.10)) * silence_loss
-            total_loss = total_loss + float(loss_w.get("temporal_mean_preserve", 0.50)) * preserve_loss
-            total_loss = total_loss + float(loss_w.get("motion_smoothness", 0.01)) * smooth_loss
+            cat_loss = (
+                float(loss_w.get("audio_motion_corr", 0.10)) * align_loss
+                + float(loss_w.get("peak_distribution", 0.05)) * peak_loss
+                + float(loss_w.get("counterfactual_delta", 0.20)) * delta_loss
+                + float(loss_w.get("silence_suppression", 0.10)) * silence_loss
+                + float(loss_w.get("temporal_mean_preserve", 0.50)) * preserve_loss
+                + float(loss_w.get("motion_smoothness", 0.01)) * smooth_loss
+            )
+            total_loss_value += float(cat_loss.item())
+            if not dry_run_no_backward:
+                cat_loss.backward()
 
             log_kwargs.update(
                 {
@@ -383,7 +397,6 @@ def main(config_path: str) -> None:
             print("Dry run complete:", {k: v for k, v in log_kwargs.items() if k != "train/cf_kind"})
             return
 
-        total_loss.backward()
         if cfg.training.get("grad_clip"):
             gnorm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=float(cfg.training.grad_clip))
             log_kwargs["train/gnorm"] = gnorm.item()
@@ -393,7 +406,7 @@ def main(config_path: str) -> None:
         optimizer.zero_grad()
         clear_cuda_cache()
 
-        log_kwargs["train/loss_total"] = total_loss.item()
+        log_kwargs["train/loss_total"] = total_loss_value
         pbar.set_postfix(**log_kwargs)
 
         if cfg.training.save_interval and (step + 1) % cfg.training.save_interval == 0:
