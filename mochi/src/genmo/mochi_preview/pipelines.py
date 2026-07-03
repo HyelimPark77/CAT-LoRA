@@ -110,7 +110,7 @@ class T5ModelFactory(ModelFactory):
 
     def get_model(self, *, local_rank, device_id, world_size):
         super().get_model(local_rank=local_rank, device_id=device_id, world_size=world_size)
-        model = T5EncoderModel.from_pretrained(self.model_dir, use_safetensors=True)
+        model = T5EncoderModel.from_pretrained(self.model_dir)
         if world_size > 1:
             model = setup_fsdp_sync(
                 model,
