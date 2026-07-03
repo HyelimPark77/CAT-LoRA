@@ -15,7 +15,7 @@ import os
 import random
 import re
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from glob import glob
 from pathlib import Path
 from typing import Any, Dict, Tuple, cast
@@ -250,7 +250,11 @@ def main(config_path: str) -> None:
 
     train_dl_iter = infinite_dl(get_train_loader(cfg))
     model, model_kwargs, is_lora, is_full, is_audio = build_model(cfg, checkpoint_path, device_id)
-    optimizer = torch.optim.AdamW(model.parameters(), **cfg.optimizer)
+    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    total_param_count = sum(p.numel() for p in model.parameters())
+    trainable_param_count = sum(p.numel() for p in trainable_params)
+    print(f"Trainable parameters: {trainable_param_count:,} / {total_param_count:,}")
+    optimizer = torch.optim.AdamW(trainable_params, **cfg.optimizer)
     scheduler = get_cosine_annealing_lr_scheduler(
         optimizer,
         warmup_steps=int(cfg.training.warmup_steps),
@@ -262,6 +266,7 @@ def main(config_path: str) -> None:
     cat_cfg = cfg.get("cat_lora", {})
     loss_w = cat_cfg.get("loss_weights", {})
     use_counterfactual = bool(cat_cfg.get("enabled", True))
+    dry_run_no_backward = bool(cfg.training.get("dry_run_no_backward", False))
 
     pbar = tqdm(range(start_step_num, int(cfg.training.num_steps)), total=int(cfg.training.num_steps), initial=start_step_num)
     for step in pbar:
@@ -291,7 +296,8 @@ def main(config_path: str) -> None:
             z_sigma = (1 - sigma_bcthw) * z + sigma_bcthw * eps
             ut = z - eps
 
-        with torch.autocast("cuda", dtype=torch.bfloat16):
+        forward_context = torch.no_grad() if dry_run_no_backward else nullcontext()
+        with forward_context, torch.autocast("cuda", dtype=torch.bfloat16):
             preds = model(
                 x=z_sigma,
                 sigma=sigma,
@@ -320,7 +326,8 @@ def main(config_path: str) -> None:
                 tempo_prob=float(cat_cfg.get("tempo_prob", 0.25)),
                 global_silence_prob=float(cat_cfg.get("global_silence_prob", 0.10)),
             )
-            with torch.autocast("cuda", dtype=torch.bfloat16):
+            forward_context = torch.no_grad() if dry_run_no_backward else nullcontext()
+            with forward_context, torch.autocast("cuda", dtype=torch.bfloat16):
                 cf_preds = model(
                     x=z_sigma,
                     sigma=sigma,
@@ -365,7 +372,7 @@ def main(config_path: str) -> None:
                 }
             )
 
-        if bool(cfg.training.get("dry_run_no_backward", False)):
+        if dry_run_no_backward:
             print("Dry run complete:", {k: v for k, v in log_kwargs.items() if k != "train/cf_kind"})
             return
 
