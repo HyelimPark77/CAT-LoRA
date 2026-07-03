@@ -41,6 +41,14 @@ Counterfactual audio is generated on the fly:
 Mismatched audio is reserved for evaluation because it does not imply a unique
 target video response.
 
+Implementation note: MusicInfuser training stores audio as precomputed Wav2Vec
+features (`*.audio_wav2vec.pt`). The current CAT-LoRA training entrypoint
+therefore creates counterfactuals in this audio-feature space. This preserves
+MusicInfuser's original preprocessing contract and avoids silently introducing a
+different audio encoder during training. Raw waveform counterfactual generation
+is still used for evaluation and can be added to training later if the dataset
+manifest includes raw audio paths.
+
 ## Audio Temporal Control
 
 For audio `a`, compute a frame-rate-aligned control curve:

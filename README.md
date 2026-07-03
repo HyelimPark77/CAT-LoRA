@@ -69,10 +69,13 @@ dynamics change when only the input audio timing changes.
 
 Added components:
 - `music_infuser/cat_lora/`: audio curves, video response curves, metrics, and differentiable training losses.
+- `music_infuser/train_cat_lora.py`: separate CAT-LoRA training entrypoint; original `music_infuser/train.py` is untouched.
 - `music_infuser/configs/cat_lora_musicinfuser.yaml`: experiment contract for CAT-LoRA training.
+- `music_infuser/configs/cat_lora_smoke.yaml`: one-step dry-run config for server validation.
 - `music_infuser/configs/counterfactual_eval_manifest.example.json`: manifest format for counterfactual evaluation.
 - `docs/CAT_LORA_METHOD.md`: method specification.
 - `scripts/run_eval_counterfactual.sh`: evaluation entry point.
+- `scripts/run_cat_lora_smoke.sh`: one-step CAT-LoRA training smoke test.
 
 The original MusicInfuser training and inference paths are intentionally left
 unchanged. CAT-LoRA training should be wired in as an explicit extension rather

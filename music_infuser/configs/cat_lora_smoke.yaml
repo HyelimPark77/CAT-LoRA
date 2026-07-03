@@ -1,0 +1,55 @@
+init_checkpoint_path: weights/dit.safetensors
+checkpoint_dir: finetunes/cat_lora_smoke
+train_data_dir: ${oc.env:CAT_LORA_TRAIN_DATA,videos_preprocessed_aist_73}
+train_data_dir_2: ${oc.env:CAT_LORA_TRAIN_DATA_2,videos_preprocessed_aist_73}
+train_data_dir_2_ratio: 0.0
+attention_mode: sdpa
+single_video_mode: true
+
+seed: 42
+audio_mode: cross_attn
+basic_prompt_ratio: 0.2
+beta_beta: 3
+beta_half: 200
+
+optimizer:
+  lr: 1e-4
+  weight_decay: 0.0
+
+model:
+  type: lora+audio
+  kwargs:
+    qkv_proj_lora_rank: 64
+    qkv_proj_lora_alpha: 64
+    qkv_proj_lora_dropout: 0.0
+    out_proj_lora_rank: 64
+    out_proj_lora_alpha: 64
+    out_proj_lora_dropout: 0.0
+
+training:
+  model_dtype: bf16
+  warmup_steps: 1
+  num_qkv_checkpoint: 48
+  num_ff_checkpoint: 48
+  num_post_attn_checkpoint: 48
+  num_steps: 1
+  save_interval: 0
+  caption_dropout: 0.0
+  grad_clip: 0.0
+  save_safetensors: true
+  dry_run_no_backward: true
+  num_workers: 0
+
+cat_lora:
+  enabled: true
+  local_silence_prob: 0.35
+  shift_prob: 0.30
+  tempo_prob: 0.25
+  global_silence_prob: 0.10
+  loss_weights:
+    audio_motion_corr: 0.10
+    peak_distribution: 0.05
+    counterfactual_delta: 0.20
+    silence_suppression: 0.10
+    temporal_mean_preserve: 0.50
+    motion_smoothness: 0.01
