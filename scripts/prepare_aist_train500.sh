@@ -11,6 +11,16 @@ NUM_FRAMES="${NUM_FRAMES:-73}"
 RUN_PREPROCESS="${RUN_PREPROCESS:-1}"
 CAPTION="${CAPTION:-a person dancing to the rhythm of music}"
 
+export PROJECT_ROOT
+export SRC_ROOT
+export RAW_OUT
+export PREPROCESSED_OUT
+export WEIGHTS_DIR
+export NUM_SOURCES
+export NUM_FRAMES
+export RUN_PREPROCESS
+export CAPTION
+
 cd "$PROJECT_ROOT"
 mkdir -p "$RAW_OUT"
 

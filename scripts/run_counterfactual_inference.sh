@@ -14,6 +14,15 @@ SAFE_T5="${SAFE_T5:-/home/ubuntu/342/hyellim/checkpoints/huggingface/hub/models-
 
 export MOCHI_T5_MODEL="${MOCHI_T5_MODEL:-$SAFE_T5}"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+export PROJECT_ROOT
+export AUDIO_SUITE
+export MODEL_NAME
+export MUSICINFUSER_PATH
+export OUT_ROOT
+export PROMPT
+export NUM_FRAMES
+export SEED
+export MOCHI_DIR
 
 cd "$PROJECT_ROOT"
 while IFS= read -r audio; do
